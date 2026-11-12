@@ -87,7 +87,22 @@ if [ -w "$tty_device" ]; then
   printf '\033]0;%s\007' "$window_title" > "$tty_device" 2>/dev/null || true
 fi
 
-# Build Starship-style status badge
+# Output valid hook JSON to stdout based on event type
+if [ "$event_name" = "PostInvocation" ]; then
+  if command -v jq >/dev/null 2>&1; then
+    jq -n '{
+      "injectSteps": [],
+      "terminationBehavior": ""
+    }'
+  else
+    cat <<EOF
+{"injectSteps":[],"terminationBehavior":""}
+EOF
+  fi
+  exit 0
+fi
+
+# Build Starship-style status badge for SessionStart and PreInvocation
 branch_badge=""
 if [ -n "$git_branch" ]; then
   branch_badge=" | 🌿 \`${git_branch}\`"
@@ -100,23 +115,19 @@ fi
 
 badge="📁 **${folder_name}**${branch_badge}${topic_badge} | ⏰ ${current_time}"
 
-# Output valid hook JSON to stdout
 if command -v jq >/dev/null 2>&1; then
   jq -n --arg badge "$badge" '{
     "injectSteps": [
       {
         "systemMessage": {
-          "systemMessage": "",
-          "metadata": {
-            "user_markdown": $badge
-          }
+          "systemMessage": $badge
         }
       }
     ]
   }'
 else
   cat <<EOF
-{"injectSteps":[{"systemMessage":{"systemMessage":"","metadata":{"user_markdown":"${badge}"}}}]}
+{"injectSteps":[{"systemMessage":{"systemMessage":"${badge}"}}]}
 EOF
 fi
 

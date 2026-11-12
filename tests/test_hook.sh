@@ -58,8 +58,8 @@ echo "=== Running oh-my-agy Test Suite ==="
 echo "Target script: $HOOK_BIN"
 echo ""
 
-# Test 1: Fresh Session without DB entry (SessionStart fallback)
-echo "--- Test 1: Fresh SessionStart (Unindexed Conversation) ---"
+# Test 1: Fresh SessionStart (Unindexed Conversation)
+echo "--- Test 1: SessionStart (Unindexed Conversation) ---"
 TTY_MOCK_1=$(mktemp)
 export OH_MY_AGY_TTY="$TTY_MOCK_1"
 
@@ -76,13 +76,11 @@ assert_eq "Exit code is 0" "0" "$EXIT_CODE_1"
 assert_valid_json "Stdout schema validation" "$OUT_1"
 
 SYS_MSG_1=$(echo "$OUT_1" | jq -r '.injectSteps[0].systemMessage.systemMessage')
-USER_MD_1=$(echo "$OUT_1" | jq -r '.injectSteps[0].systemMessage.metadata.user_markdown')
 TTY_OUT_1=$(cat "$TTY_MOCK_1")
 
-assert_eq "systemMessage text is empty string (zero LLM token pollution)" "" "$SYS_MSG_1"
-assert_contains "Badge includes repository folder" "📁 **sandcastles-oh-my-agy**" "$USER_MD_1"
-assert_contains "Badge includes active git branch" "🌿 \`main\`" "$USER_MD_1"
-assert_contains "Badge includes clock icon" "⏰" "$USER_MD_1"
+assert_contains "Badge includes repository folder" "📁 **sandcastles-oh-my-agy**" "$SYS_MSG_1"
+assert_contains "Badge includes active git branch" "🌿 \`main\`" "$SYS_MSG_1"
+assert_contains "Badge includes clock icon" "⏰" "$SYS_MSG_1"
 
 # Verify OSC 0 sequence in tty mock
 assert_contains "TTY window title contains folder and branch" "[sandcastles-oh-my-agy:main]" "$TTY_OUT_1"
@@ -90,16 +88,15 @@ assert_eq "TTY output begins with ESC ] 0 ;" "1b5d303b" "$(head -c 4 "$TTY_MOCK_
 rm -f "$TTY_MOCK_1"
 echo ""
 
-# Test 2: Ongoing Session with DB Topic (PostInvocation)
-echo "--- Test 2: PostInvocation with SQLite DB Topic Lookup ---"
+# Test 2: PreInvocation (Dynamic Refresh on Prompt)
+echo "--- Test 2: PreInvocation (Prompt Submission Badge & Sticky Title) ---"
 TTY_MOCK_2=$(mktemp)
 export OH_MY_AGY_TTY="$TTY_MOCK_2"
 
-# Real conversationId from ~/.gemini/antigravity-cli/conversation_summaries.db
 INPUT_2='{
-  "conversationId": "ecb50299-ff21-43f1-9353-e09135ffb8be",
+  "conversationId": "unindexed-poc-002",
   "cwd": "'"$PLUGIN_ROOT"'",
-  "hookEventName": "PostInvocation"
+  "hookEventName": "PreInvocation"
 }'
 
 OUT_2=$(echo "$INPUT_2" | "$HOOK_BIN")
@@ -108,24 +105,25 @@ EXIT_CODE_2=$?
 assert_eq "Exit code is 0" "0" "$EXIT_CODE_2"
 assert_valid_json "Stdout schema validation" "$OUT_2"
 
-USER_MD_2=$(echo "$OUT_2" | jq -r '.injectSteps[0].systemMessage.metadata.user_markdown')
+SYS_MSG_2=$(echo "$OUT_2" | jq -r '.injectSteps[0].systemMessage.systemMessage')
 TTY_OUT_2=$(cat "$TTY_MOCK_2")
 
-assert_contains "Badge contains resolved SQLite title" "💬 *Agy CLI Chat Management Initiative*" "$USER_MD_2"
-assert_contains "TTY window title contains resolved SQLite title" "Agy CLI Chat Management Initiative" "$TTY_OUT_2"
+assert_contains "PreInvocation badge includes folder" "📁 **sandcastles-oh-my-agy**" "$SYS_MSG_2"
+assert_contains "PreInvocation badge includes branch" "🌿 \`main\`" "$SYS_MSG_2"
+assert_contains "PreInvocation TTY title set" "[sandcastles-oh-my-agy:main]" "$TTY_OUT_2"
 rm -f "$TTY_MOCK_2"
 echo ""
 
-# Test 3: Workspace Directory Outside Git
-echo "--- Test 3: Non-Git Directory Fallback ---"
-NON_GIT_DIR=$(mktemp -d /tmp/test-nongit-XXXXXX)
+# Test 3: PostInvocation with SQLite DB Topic Lookup
+echo "--- Test 3: PostInvocation with SQLite DB Topic Lookup ---"
 TTY_MOCK_3=$(mktemp)
 export OH_MY_AGY_TTY="$TTY_MOCK_3"
 
+# Real conversationId from ~/.gemini/antigravity-cli/conversation_summaries.db
 INPUT_3='{
-  "conversationId": "nongit-poc-003",
-  "cwd": "'"$NON_GIT_DIR"'",
-  "hookEventName": "SessionStart"
+  "conversationId": "ecb50299-ff21-43f1-9353-e09135ffb8be",
+  "cwd": "'"$PLUGIN_ROOT"'",
+  "hookEventName": "PostInvocation"
 }'
 
 OUT_3=$(echo "$INPUT_3" | "$HOOK_BIN")
@@ -134,31 +132,26 @@ EXIT_CODE_3=$?
 assert_eq "Exit code is 0" "0" "$EXIT_CODE_3"
 assert_valid_json "Stdout schema validation" "$OUT_3"
 
-USER_MD_3=$(echo "$OUT_3" | jq -r '.injectSteps[0].systemMessage.metadata.user_markdown')
+INJECT_STEPS_LEN=$(echo "$OUT_3" | jq '.injectSteps | length')
+TERM_BEHAVIOR=$(echo "$OUT_3" | jq -r '.terminationBehavior')
 TTY_OUT_3=$(cat "$TTY_MOCK_3")
-NON_GIT_BASE=$(basename "$NON_GIT_DIR")
 
-assert_contains "Badge contains folder name" "📁 **$NON_GIT_BASE**" "$USER_MD_3"
-if [[ "$USER_MD_3" == *"🌿"* ]]; then
-  echo "  [FAIL] Badge should not contain git branch icon outside git repo"
-  FAILED=$((FAILED + 1))
-else
-  echo "  [PASS] Badge correctly omits git branch outside git repo"
-  PASSED=$((PASSED + 1))
-fi
-
-rm -rf "$NON_GIT_DIR" "$TTY_MOCK_3"
+assert_eq "injectSteps is empty array" "0" "$INJECT_STEPS_LEN"
+assert_eq "terminationBehavior is empty string" "" "$TERM_BEHAVIOR"
+assert_contains "TTY window title contains resolved SQLite title" "Agy CLI Chat Management Initiative" "$TTY_OUT_3"
+rm -f "$TTY_MOCK_3"
 echo ""
 
-# Test 4: Fallback to workspacePaths when cwd is omitted
-echo "--- Test 4: Fallback to workspacePaths ---"
+# Test 4: Workspace Directory Outside Git
+echo "--- Test 4: Non-Git Directory Fallback ---"
+NON_GIT_DIR=$(mktemp -d /tmp/test-nongit-XXXXXX)
 TTY_MOCK_4=$(mktemp)
 export OH_MY_AGY_TTY="$TTY_MOCK_4"
 
 INPUT_4='{
-  "conversationId": "test-ws-004",
-  "workspacePaths": ["'"$PLUGIN_ROOT"'"],
-  "hookEventName": "SessionStart"
+  "conversationId": "nongit-poc-004",
+  "cwd": "'"$NON_GIT_DIR"'",
+  "hookEventName": "PreInvocation"
 }'
 
 OUT_4=$(echo "$INPUT_4" | "$HOOK_BIN")
@@ -167,36 +160,69 @@ EXIT_CODE_4=$?
 assert_eq "Exit code is 0" "0" "$EXIT_CODE_4"
 assert_valid_json "Stdout schema validation" "$OUT_4"
 
-USER_MD_4=$(echo "$OUT_4" | jq -r '.injectSteps[0].systemMessage.metadata.user_markdown')
-assert_contains "Badge resolved folder from workspacePaths" "📁 **sandcastles-oh-my-agy**" "$USER_MD_4"
-rm -f "$TTY_MOCK_4"
+SYS_MSG_4=$(echo "$OUT_4" | jq -r '.injectSteps[0].systemMessage.systemMessage')
+TTY_OUT_4=$(cat "$TTY_MOCK_4")
+NON_GIT_BASE=$(basename "$NON_GIT_DIR")
+
+assert_contains "Badge contains folder name" "📁 **$NON_GIT_BASE**" "$SYS_MSG_4"
+if [[ "$SYS_MSG_4" == *"🌿"* ]]; then
+  echo "  [FAIL] Badge should not contain git branch icon outside git repo"
+  FAILED=$((FAILED + 1))
+else
+  echo "  [PASS] Badge correctly omits git branch outside git repo"
+  PASSED=$((PASSED + 1))
+fi
+
+rm -rf "$NON_GIT_DIR" "$TTY_MOCK_4"
 echo ""
 
-# Test 5: Headless / Unattached / Non-writable TTY
-echo "--- Test 5: Headless & Non-writable TTY Robustness ---"
-export OH_MY_AGY_TTY="/dev/nonexistent_tty_device_test"
+# Test 5: Fallback to workspacePaths when cwd is omitted
+echo "--- Test 5: Fallback to workspacePaths ---"
+TTY_MOCK_5=$(mktemp)
+export OH_MY_AGY_TTY="$TTY_MOCK_5"
 
 INPUT_5='{
-  "conversationId": "test-headless-005",
+  "conversationId": "test-ws-005",
+  "workspacePaths": ["'"$PLUGIN_ROOT"'"],
+  "hookEventName": "SessionStart"
+}'
+
+OUT_5=$(echo "$INPUT_5" | "$HOOK_BIN")
+EXIT_CODE_5=$?
+
+assert_eq "Exit code is 0" "0" "$EXIT_CODE_5"
+assert_valid_json "Stdout schema validation" "$OUT_5"
+
+SYS_MSG_5=$(echo "$OUT_5" | jq -r '.injectSteps[0].systemMessage.systemMessage')
+assert_contains "Badge resolved folder from workspacePaths" "📁 **sandcastles-oh-my-agy**" "$SYS_MSG_5"
+rm -f "$TTY_MOCK_5"
+echo ""
+
+# Test 6: Headless & Non-writable TTY Robustness
+echo "--- Test 6: Headless & Non-writable TTY Robustness ---"
+export OH_MY_AGY_TTY="/dev/nonexistent_tty_device_test"
+
+INPUT_6='{
+  "conversationId": "test-headless-006",
   "cwd": "'"$PLUGIN_ROOT"'",
   "hookEventName": "PostInvocation"
 }'
 
-OUT_5=$(echo "$INPUT_5" | "$HOOK_BIN" 2>/dev/null)
-EXIT_CODE_5=$?
-
-assert_eq "Exit code is 0 when TTY is unwritable" "0" "$EXIT_CODE_5"
-assert_valid_json "Stdout schema remains valid JSON in headless mode" "$OUT_5"
-echo ""
-
-# Test 6: Empty input payload
-echo "--- Test 6: Empty Input Handling ---"
-unset OH_MY_AGY_TTY
-OUT_6=$(echo "" | "$HOOK_BIN" 2>/dev/null)
+OUT_6=$(echo "$INPUT_6" | "$HOOK_BIN" 2>/dev/null)
 EXIT_CODE_6=$?
 
-assert_eq "Exit code is 0 on empty stdin" "0" "$EXIT_CODE_6"
-assert_valid_json "Stdout remains valid JSON on empty stdin" "$OUT_6"
+assert_eq "Exit code is 0 when TTY is unwritable" "0" "$EXIT_CODE_6"
+assert_valid_json "Stdout schema remains valid JSON in headless mode" "$OUT_6"
+echo ""
+
+# Test 7: Empty input payload
+echo "--- Test 7: Empty Input Handling ---"
+unset OH_MY_AGY_TTY
+OUT_7=$(echo "" | "$HOOK_BIN" 2>/dev/null)
+EXIT_CODE_7=$?
+
+assert_eq "Exit code is 0 on empty stdin" "0" "$EXIT_CODE_7"
+assert_valid_json "Stdout remains valid JSON on empty stdin" "$OUT_7"
 echo ""
 
 # Summary

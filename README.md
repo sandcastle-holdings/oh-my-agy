@@ -22,20 +22,22 @@ Engineered by Alex Seif and Sandcastle Holdings.
 The plugin hooks into Antigravity lifecycle events through `hooks.json`:
 
 - `SessionStart`: Runs when a conversation starts, establishing initial window title and badge.
-- `PostInvocation`: Runs after each model turn finishes, updating the title and injecting the completion badge.
+- `PreInvocation`: Runs before each model turn, ensuring the window title remains sticky across TUI redraws and showing an updated badge.
+- `PostInvocation`: Runs after each model turn finishes, updating the terminal title with the conversation title from the local SQLite database.
 
 Escape sequences for window titles are directed straight to `/dev/tty` so they never corrupt Antigravity's standard JSON communication pipes. Hook results are returned as strict JSON payloads to `stdout`.
 
 ```text
 Antigravity Runtime
        │
-       ├─► stdin (JSON context: cwd, conversationId, etc.)
+       ├─► stdin (JSON context: cwd, conversationId, hookEventName, etc.)
        ▼
 scripts/title_and_badge.sh
        │
        ├─► /dev/tty: OSC 0 escape sequence (\033]0;[folder:branch] topic\007)
        ▼
-   stdout: {"injectSteps": [{"systemMessage": {"systemMessage": "", "metadata": {"user_markdown": "..."}}}]}
+   stdout: SessionStart/PreInvocation -> {"injectSteps": [{"systemMessage": {"systemMessage": "..."}}]}
+           PostInvocation             -> {"injectSteps": [], "terminationBehavior": ""}
 ```
 
 ---

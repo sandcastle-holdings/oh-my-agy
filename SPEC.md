@@ -36,12 +36,17 @@ The plugin decouples user interface feedback from model context:
 
 1. **`SessionStart`**:
    - Triggers once when a new conversation session initializes.
-   - Sets the initial window title and displays an introductory session badge.
+   - Sets the initial window title and returns the introductory session badge.
 
-2. **`PostInvocation`**:
+2. **`PreInvocation`**:
+   - Triggers before each model invocation when the user submits a prompt.
+   - Refreshes the terminal window title immediately so the title remains sticky across TUI redraws.
+   - Displays a status badge for the current invocation.
+
+3. **`PostInvocation`**:
    - Triggers immediately after model and tool steps complete for a turn.
-   - Refreshes the terminal window title with any newly generated conversation title.
-   - Displays an updated timestamped status badge.
+   - Updates the terminal window title with any newly generated conversation title from the local SQLite summaries database.
+   - Returns an empty injectSteps array (`{"injectSteps": [], "terminationBehavior": ""}`) without adding extraneous conversation steps.
 
 ### Hook Configuration (`hooks.json`)
 
@@ -49,6 +54,13 @@ The plugin decouples user interface feedback from model context:
 {
   "oh-my-agy": {
     "SessionStart": [
+      {
+        "type": "command",
+        "command": "./scripts/title_and_badge.sh",
+        "timeout": 10
+      }
+    ],
+    "PreInvocation": [
       {
         "type": "command",
         "command": "./scripts/title_and_badge.sh",
@@ -79,7 +91,7 @@ The hook receives JSON on stdin containing standard Antigravity session metadata
   "conversationId": "52cac4e1-6883-41ac-95cc-aeb74b5621bf",
   "workspacePaths": ["/home/alexseif/dev/sandcastles-oh-my-agy"],
   "cwd": "/home/alexseif/dev/sandcastles-oh-my-agy",
-  "hookEventName": "SessionStart",
+  "hookEventName": "PreInvocation",
   "modelName": "auto",
   "transcriptPath": "/path/to/transcript.jsonl",
   "artifactDirectoryPath": "/path/to/artifacts"
@@ -90,23 +102,32 @@ The script extracts:
 - `conversationId`: Primary key for SQLite title lookup.
 - `cwd`: Agent working directory, used to determine project name and git state.
 - `workspacePaths`: Fallback directory if `cwd` is absent.
+- `hookEventName`: Event name (`SessionStart`, `PreInvocation`, `PostInvocation`).
 
 ### 3.2 Output Contract (stdout)
 
-The script must write strictly valid JSON to stdout matching the Antigravity hook schema:
+#### For `SessionStart` and `PreInvocation`:
+The script outputs a valid systemMessage step:
 
 ```json
 {
   "injectSteps": [
     {
       "systemMessage": {
-        "systemMessage": "",
-        "metadata": {
-          "user_markdown": "📁 **sandcastles-oh-my-agy** | 🌿 `main` | ⏰ 18:15"
-        }
+        "systemMessage": "📁 **sandcastles-oh-my-agy** | 🌿 `main` | ⏰ 18:15"
       }
     }
   ]
+}
+```
+
+#### For `PostInvocation`:
+The script updates the terminal window title via `/dev/tty` and returns:
+
+```json
+{
+  "injectSteps": [],
+  "terminationBehavior": ""
 }
 ```
 
