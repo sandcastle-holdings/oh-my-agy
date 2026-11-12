@@ -1,0 +1,7 @@
+{
+  "name": "oh-my-agy",
+  "version": "0.1.0",
+  "description": "Starship-style statuslines, dynamic terminal window titles, and ambient badges for Google Antigravity.",
+  "author": "Alex Seif",
+  "homepage": "https://alexseif.com"
+}

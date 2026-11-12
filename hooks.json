@@ -1,0 +1,18 @@
+{
+  "oh-my-agy": {
+    "SessionStart": [
+      {
+        "type": "command",
+        "command": "./scripts/title_and_badge.sh",
+        "timeout": 10
+      }
+    ],
+    "PostInvocation": [
+      {
+        "type": "command",
+        "command": "./scripts/title_and_badge.sh",
+        "timeout": 10
+      }
+    ]
+  }
+}
