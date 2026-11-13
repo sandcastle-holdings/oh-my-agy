@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Test Suite: oh-my-agy Hook Verification
+# Test Suite: oh-my-agy Hook Verification (Tab-Only Mode)
 # Engineered by Alex Seif and Sandcastle Holdings
 
 set -euo pipefail
@@ -69,12 +69,37 @@ assert_valid_json() {
   fi
 }
 
-echo "=== Running oh-my-agy Test Suite ==="
+# Asserts that the file contains ONLY an OSC 0 sequence (\033]0;...\007) and zero viewport text
+assert_osc0_only() {
+  local label="$1"
+  local file="$2"
+  local first_byte
+  local last_byte
+  
+  if [ ! -s "$file" ]; then
+    echo "  [FAIL] $label: file is empty"
+    FAILED=$((FAILED + 1))
+    return
+  fi
+
+  first_bytes=$(head -c 4 "$file" | xxd -p)
+  last_byte=$(tail -c 1 "$file" | xxd -p)
+
+  if [ "$first_bytes" = "1b5d303b" ] && [ "$last_byte" = "07" ]; then
+    echo "  [PASS] $label: strictly wrapped in OSC 0 delimiters (\\033]0; ... \\007)"
+    PASSED=$((PASSED + 1))
+  else
+    echo "  [FAIL] $label: invalid delimiters (first: $first_bytes, last: $last_byte)"
+    FAILED=$((FAILED + 1))
+  fi
+}
+
+echo "=== Running oh-my-agy Test Suite (Tab-Only Mode) ==="
 echo "Target script: $HOOK_BIN"
 echo ""
 
-# Test 1: SessionStart (Initial Title, Empty injectSteps)
-echo "--- Test 1: SessionStart (Initial Title, Empty injectSteps) ---"
+# Test 1: SessionStart (Initial Title, Zero Viewport Interference)
+echo "--- Test 1: SessionStart (Initial Window Title) ---"
 TTY_MOCK_1=$(mktemp)
 export OH_MY_AGY_TTY="$TTY_MOCK_1"
 unset OH_MY_AGY_CONFIG 2>/dev/null || true
@@ -96,13 +121,13 @@ TTY_OUT_1=$(cat "$TTY_MOCK_1")
 
 assert_eq "SessionStart injectSteps is empty array" "0" "$INJECT_LEN_1"
 assert_contains "TTY window title contains folder and branch" "[sandcastles-oh-my-agy:main]" "$TTY_OUT_1"
-assert_eq "TTY output begins with ESC ] 0 ;" "1b5d303b" "$(head -c 4 "$TTY_MOCK_1" | xxd -p)"
-assert_not_contains "SessionStart does not output footer divider" "── 📁" "$TTY_OUT_1"
+assert_osc0_only "TTY output contains exclusively OSC 0 escape code" "$TTY_MOCK_1"
+assert_not_contains "TTY contains zero viewport divider text" "── 📁" "$TTY_OUT_1"
 rm -f "$TTY_MOCK_1"
 echo ""
 
-# Test 2: PreInvocation (Sticky Title Refresh, Empty injectSteps)
-echo "--- Test 2: PreInvocation (Sticky Title Refresh, Empty injectSteps) ---"
+# Test 2: PreInvocation (Dynamic Title Refresh on Prompt)
+echo "--- Test 2: PreInvocation (Sticky Title Refresh) ---"
 TTY_MOCK_2=$(mktemp)
 export OH_MY_AGY_TTY="$TTY_MOCK_2"
 
@@ -121,14 +146,15 @@ assert_valid_json "Stdout schema validation" "$OUT_2"
 INJECT_LEN_2=$(echo "$OUT_2" | jq '.injectSteps | length')
 TTY_OUT_2=$(cat "$TTY_MOCK_2")
 
-assert_eq "PreInvocation injectSteps is empty array (no prompt pollution)" "0" "$INJECT_LEN_2"
+assert_eq "PreInvocation injectSteps is empty array" "0" "$INJECT_LEN_2"
 assert_contains "PreInvocation TTY title refreshed" "[sandcastles-oh-my-agy:main]" "$TTY_OUT_2"
-assert_not_contains "PreInvocation does not output footer divider" "── 📁" "$TTY_OUT_2"
+assert_osc0_only "PreInvocation TTY is strictly OSC 0 escape code" "$TTY_MOCK_2"
+assert_not_contains "PreInvocation contains zero viewport divider text" "── 📁" "$TTY_OUT_2"
 rm -f "$TTY_MOCK_2"
 echo ""
 
-# Test 3: PostInvocation (Visible TTY Footer Divider + Response Badge)
-echo "--- Test 3: PostInvocation (Visible TTY Footer Divider + Response Badge) ---"
+# Test 3: PostInvocation (Title Updated with SQLite Topic, Zero Injected Messages)
+echo "--- Test 3: PostInvocation (Topic Resolution) ---"
 TTY_MOCK_3=$(mktemp)
 export OH_MY_AGY_TTY="$TTY_MOCK_3"
 
@@ -144,21 +170,18 @@ EXIT_CODE_3=$?
 assert_eq "Exit code is 0" "0" "$EXIT_CODE_3"
 assert_valid_json "Stdout schema validation" "$OUT_3"
 
-SYS_MSG_3=$(echo "$OUT_3" | jq -r '.injectSteps[0].systemMessage.systemMessage')
+INJECT_LEN_3=$(echo "$OUT_3" | jq '.injectSteps | length')
 TTY_OUT_3=$(cat "$TTY_MOCK_3")
 
-assert_contains "PostInvocation badge contains folder" "📁 **sandcastles-oh-my-agy**" "$SYS_MSG_3"
-assert_contains "PostInvocation badge contains branch" "🌿 \`main\`" "$SYS_MSG_3"
-assert_contains "PostInvocation badge contains SQLite topic" "💬 *Agy CLI Chat Management Initiative*" "$SYS_MSG_3"
-
-# Verify TTY title and visible divider
-assert_contains "TTY window title updated with topic" "Agy CLI Chat Management Initiative" "$TTY_OUT_3"
-assert_contains "TTY received visible footer divider" "── 📁 sandcastles-oh-my-agy | 🌿 main | 💬 Agy CLI Chat Management Initiative" "$TTY_OUT_3"
+assert_eq "PostInvocation injectSteps is empty array (zero trajectory pollution)" "0" "$INJECT_LEN_3"
+assert_contains "TTY window title updated with resolved SQLite topic" "Agy CLI Chat Management Initiative" "$TTY_OUT_3"
+assert_osc0_only "PostInvocation TTY is strictly OSC 0 escape code" "$TTY_MOCK_3"
+assert_not_contains "PostInvocation contains zero viewport divider text" "── 📁" "$TTY_OUT_3"
 rm -f "$TTY_MOCK_3"
 echo ""
 
 # Test 4: Workspace Outside Git
-echo "--- Test 4: Workspace Outside Git ---"
+echo "--- Test 4: Non-Git Directory Fallback ---"
 NON_GIT_DIR=$(mktemp -d /tmp/test-nongit-XXXXXX)
 TTY_MOCK_4=$(mktemp)
 export OH_MY_AGY_TTY="$TTY_MOCK_4"
@@ -175,14 +198,13 @@ EXIT_CODE_4=$?
 assert_eq "Exit code is 0" "0" "$EXIT_CODE_4"
 assert_valid_json "Stdout schema validation" "$OUT_4"
 
-SYS_MSG_4=$(echo "$OUT_4" | jq -r '.injectSteps[0].systemMessage.systemMessage')
+INJECT_LEN_4=$(echo "$OUT_4" | jq '.injectSteps | length')
 TTY_OUT_4=$(cat "$TTY_MOCK_4")
 NON_GIT_BASE=$(basename "$NON_GIT_DIR")
 
-assert_contains "Badge contains folder name" "📁 **$NON_GIT_BASE**" "$SYS_MSG_4"
-assert_not_contains "Badge omits branch icon outside git" "🌿" "$SYS_MSG_4"
-assert_contains "TTY footer contains folder name" "── 📁 $NON_GIT_BASE" "$TTY_OUT_4"
-assert_not_contains "TTY footer omits branch icon outside git" "🌿" "$TTY_OUT_4"
+assert_eq "Non-git injectSteps is empty array" "0" "$INJECT_LEN_4"
+assert_contains "TTY title contains folder name" "[$NON_GIT_BASE]" "$TTY_OUT_4"
+assert_not_contains "TTY title omits branch colon outside git" "[$NON_GIT_BASE:" "$TTY_OUT_4"
 
 rm -rf "$NON_GIT_DIR" "$TTY_MOCK_4"
 echo ""
@@ -204,45 +226,30 @@ EXIT_CODE_5=$?
 assert_eq "Exit code is 0" "0" "$EXIT_CODE_5"
 assert_valid_json "Stdout schema validation" "$OUT_5"
 
-SYS_MSG_5=$(echo "$OUT_5" | jq -r '.injectSteps[0].systemMessage.systemMessage')
-assert_contains "Badge resolved folder from workspacePaths" "📁 **sandcastles-oh-my-agy**" "$SYS_MSG_5"
+TTY_OUT_5=$(cat "$TTY_MOCK_5")
+assert_contains "TTY title resolved folder from workspacePaths" "[sandcastles-oh-my-agy:main]" "$TTY_OUT_5"
 rm -f "$TTY_MOCK_5"
 echo ""
 
-# Test 6: Configuration Overrides (show_footer: false, show_title: false)
-echo "--- Test 6: Configuration Overrides (~/.config/oh-my-agy/config.json) ---"
-CFG_FILE_DISABLE_FOOTER=$(mktemp)
-echo '{"show_footer": false, "show_title": true}' > "$CFG_FILE_DISABLE_FOOTER"
-TTY_MOCK_6A=$(mktemp)
-export OH_MY_AGY_TTY="$TTY_MOCK_6A"
-export OH_MY_AGY_CONFIG="$CFG_FILE_DISABLE_FOOTER"
+# Test 6: Configuration Overrides (show_title: false)
+echo "--- Test 6: Configuration Override (show_title: false) ---"
+CFG_FILE_DISABLE_TITLE=$(mktemp)
+echo '{"show_title": false}' > "$CFG_FILE_DISABLE_TITLE"
+TTY_MOCK_6=$(mktemp)
+export OH_MY_AGY_TTY="$TTY_MOCK_6"
+export OH_MY_AGY_CONFIG="$CFG_FILE_DISABLE_TITLE"
 
-INPUT_6A='{
-  "conversationId": "test-cfg-006a",
+INPUT_6='{
+  "conversationId": "test-cfg-006",
   "cwd": "'"$PLUGIN_ROOT"'",
   "hookEventName": "PostInvocation"
 }'
 
-OUT_6A=$(echo "$INPUT_6A" | "$HOOK_BIN")
-TTY_OUT_6A=$(cat "$TTY_MOCK_6A")
+OUT_6=$(echo "$INPUT_6" | "$HOOK_BIN")
+TTY_OUT_6=$(cat "$TTY_MOCK_6")
 
-assert_not_contains "TTY footer is omitted when show_footer=false" "── 📁" "$TTY_OUT_6A"
-assert_contains "TTY window title is still emitted when show_title=true" "[sandcastles-oh-my-agy:main]" "$TTY_OUT_6A"
-rm -f "$CFG_FILE_DISABLE_FOOTER" "$TTY_MOCK_6A"
-
-# Test show_title: false
-CFG_FILE_DISABLE_TITLE=$(mktemp)
-echo '{"show_footer": true, "show_title": false}' > "$CFG_FILE_DISABLE_TITLE"
-TTY_MOCK_6B=$(mktemp)
-export OH_MY_AGY_TTY="$TTY_MOCK_6B"
-export OH_MY_AGY_CONFIG="$CFG_FILE_DISABLE_TITLE"
-
-OUT_6B=$(echo "$INPUT_6A" | "$HOOK_BIN")
-TTY_OUT_6B=$(cat "$TTY_MOCK_6B")
-
-assert_not_contains "TTY title is omitted when show_title=false" $'\033]0;' "$TTY_OUT_6B"
-assert_contains "TTY footer is still emitted when show_footer=true" "── 📁" "$TTY_OUT_6B"
-rm -f "$CFG_FILE_DISABLE_TITLE" "$TTY_MOCK_6B"
+assert_eq "TTY is completely empty when show_title=false" "" "$TTY_OUT_6"
+rm -f "$CFG_FILE_DISABLE_TITLE" "$TTY_MOCK_6"
 unset OH_MY_AGY_CONFIG
 echo ""
 

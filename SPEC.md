@@ -1,13 +1,13 @@
-# Technical Specification: oh-my-agy
+# Technical Specification: oh-my-agy (Tab-Only Mode)
 
 ## 1. Architectural Overview
 
-`oh-my-agy` operates as a native Antigravity plugin. It hooks into the agent execution loop at lifecycle boundaries (`SessionStart` and `PostInvocation`) to maintain terminal window titles and deliver visual status updates.
+`oh-my-agy` operates as a native Antigravity plugin in **Tab-Only Mode**. It hooks into the agent execution loop at lifecycle boundaries (`SessionStart`, `PreInvocation`, and `PostInvocation`) to maintain terminal window and tab titles without touching the terminal viewport.
 
-The plugin decouples user interface feedback from model context:
-- **Terminal Titles**: Emitted via OSC 0 escape codes directly to `/dev/tty`.
-- **Inline Badges**: Emitted via stdout as hook JSON responses using `metadata.user_markdown`.
-- **Model Context**: Left completely unaffected by setting `systemMessage: ""`.
+The plugin provides ambient session context:
+- **Terminal Titles**: Emitted exclusively via standard OSC 0 escape codes directed to `/dev/tty`.
+- **Zero Viewport Interference**: Never writes printable text, newlines, or terminal control sequences to the viewport, preventing TUI cursor corruption and terminal desynchronization.
+- **Model Context Integrity**: Hook executions return empty `injectSteps: []`, ensuring zero tokens or system prompts are injected into the conversation trajectory.
 
 ```
                     ┌───────────────────────────┐
@@ -20,11 +20,11 @@ The plugin decouples user interface feedback from model context:
                     │ scripts/title_and_badge.sh │
                     └──────┬─────────────┬──────┘
                            │             │
-        OSC 0 via /dev/tty │             │ JSON via stdout
+        OSC 0 via /dev/tty │             │ JSON via stdout (injectSteps: [])
                            ▼             ▼
        ┌─────────────────────┐       ┌──────────────────────┐
-       │ Terminal Tab/Window │       │ Injected User Badge  │
-       │  [repo:branch] Topic │       │ 📁 repo | 🌿 branch  │
+       │ Terminal Tab/Window │       │ Trajectory Unchanged │
+       │  [repo:branch] Topic │       │  (Zero LLM Tokens)   │
        └─────────────────────┘       └──────────────────────┘
 ```
 
@@ -36,20 +36,18 @@ The plugin decouples user interface feedback from model context:
 
 1. **`SessionStart`**:
    - Triggers once when a new conversation session initializes.
-   - Sets the initial window title via `/dev/tty`.
+   - Sets the initial window and tab title via `/dev/tty`.
    - Returns empty injectSteps (`{"injectSteps": [], "terminationBehavior": ""}`).
 
 2. **`PreInvocation`**:
    - Triggers before each model invocation when the user submits a prompt.
    - Refreshes the terminal window title immediately so the title remains sticky across TUI redraws.
-   - Returns empty injectSteps (`{"injectSteps": [], "terminationBehavior": ""}`) to ensure no pre-turn prompt pollution occurs.
+   - Returns empty injectSteps (`{"injectSteps": [], "terminationBehavior": ""}`).
 
 3. **`PostInvocation`**:
-   - Triggers immediately after assistant finishes responding.
-   - Updates the terminal window title with the resolved topic title from the local SQLite summaries database.
-   - Emits a styled visual footer divider directly to `/dev/tty`:
-     `\n\033[90m── 📁 <folder> | 🌿 <branch> | 💬 <topic> | ⏰ <time> ──\033[0m\n\n`
-   - Returns valid hook JSON with `injectSteps` containing the completion badge and `terminationBehavior: ""`.
+   - Triggers immediately after the assistant finishes responding.
+   - Refreshes the terminal window title with the resolved topic title from the local SQLite summaries database.
+   - Returns empty injectSteps (`{"injectSteps": [], "terminationBehavior": ""}`).
 
 ### Hook Configuration (`hooks.json`)
 
@@ -109,24 +107,7 @@ The script extracts:
 
 ### 3.2 Output Contract (stdout)
 
-#### For `PostInvocation`:
-The script outputs the closing badge in `injectSteps`:
-
-```json
-{
-  "injectSteps": [
-    {
-      "systemMessage": {
-        "systemMessage": "📁 **sandcastles-oh-my-agy** | 🌿 `main` | 💬 *Agy CLI Chat Management Initiative* | ⏰ 09:20"
-      }
-    }
-  ],
-  "terminationBehavior": ""
-}
-```
-
-#### For `SessionStart` and `PreInvocation`:
-The script outputs empty injectSteps:
+For all events (`SessionStart`, `PreInvocation`, `PostInvocation`), the script returns an empty `injectSteps` array:
 
 ```json
 {
@@ -134,6 +115,11 @@ The script outputs empty injectSteps:
   "terminationBehavior": ""
 }
 ```
+
+Key guarantees:
+- Zero trajectory alteration.
+- Zero LLM token consumption.
+- Zero viewport text or cursor corruption.
 
 ---
 
@@ -143,12 +129,10 @@ Optional configuration can be placed in `~/.config/oh-my-agy/config.json`:
 
 ```json
 {
-  "show_footer": true,
   "show_title": true
 }
 ```
 
-- **`show_footer`** (boolean, default: `true`): Toggles the styled terminal footer divider printed to `/dev/tty` after each assistant turn.
 - **`show_title`** (boolean, default: `true`): Toggles the OSC 0 escape sequence updating the window and tab title.
 
 Key requirements:

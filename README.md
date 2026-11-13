@@ -1,6 +1,6 @@
-# oh-my-agy
+# oh-my-agy (Tab-Only Mode)
 
-> Delightful terminal statuslines, dynamic window naming, and ambient context badges for Google Antigravity.
+> Dynamic terminal tab and window naming for Google Antigravity with zero viewport interference.
 
 Engineered by Alex Seif and Sandcastle Holdings.
 
@@ -8,11 +8,11 @@ Engineered by Alex Seif and Sandcastle Holdings.
 
 ## Overview
 
-`oh-my-agy` is a native plugin for the Google Antigravity CLI and IDE. Inspired by Starship and Oh My Zsh, it enriches developer sessions with contextual terminal enhancements while preserving token budgets:
+`oh-my-agy` is a native plugin for the Google Antigravity CLI and IDE operating in **Tab-Only Mode**. It enriches developer sessions with contextual terminal tab and window titles while maintaining absolute viewport purity:
 
-- **Dynamic Terminal Titles**: Sets your terminal window and tab title via OSC 0 escape codes, formatting it as `[<folder>:<branch>] <topic>`.
-- **Inline Status Badges**: Injects a clean status badge (`📁 folder | 🌿 branch | ⏰ time`) at session startup and turn completion.
-- **Zero Token Overhead**: Uses Antigravity's `metadata.user_markdown` hook feature with empty system prompts, ensuring the model's context window remains untouched.
+- **Dynamic Terminal Titles**: Sets terminal window and tab titles via standard OSC 0 escape codes, formatted as `[<folder>:<branch>] <topic>`.
+- **Zero Viewport Interference**: Never prints text, badges, or ANSI control sequences to the terminal viewport, eliminating cursor jitter and terminal desynchronization.
+- **Zero Token Overhead**: Returns empty `injectSteps: []` across all lifecycle events, preserving conversation trajectory and token budgets.
 - **SQLite Topic Lookup**: Reads Antigravity's local session summary database to retrieve human-readable conversation titles, with automatic fallbacks for new conversations.
 
 ---
@@ -22,10 +22,10 @@ Engineered by Alex Seif and Sandcastle Holdings.
 The plugin hooks into Antigravity lifecycle events through `hooks.json`:
 
 - `SessionStart`: Sets the initial terminal window and tab title via `/dev/tty`.
-- `PreInvocation`: Refreshes the window title before prompt execution to ensure stickiness across TUI redraws, without injecting pre-response badges.
-- `PostInvocation`: Runs immediately after the assistant finishes responding. Emits a styled visual footer divider directly to `/dev/tty` (`── 📁 folder | 🌿 branch | ⏰ time ──`), updates the window title with the conversation topic, and returns the closing status badge.
+- `PreInvocation`: Refreshes the window title on prompt submission so it remains sticky across TUI redraws.
+- `PostInvocation`: Refreshes the window title after the model completes using the newly indexed conversation topic from SQLite.
 
-Window title escape codes and visible footer dividers are directed straight to `/dev/tty` so they never corrupt Antigravity's standard JSON communication pipes. Hook responses are returned as strict JSON payloads to `stdout`.
+OSC 0 escape sequences are directed straight to `/dev/tty` so they never corrupt Antigravity's standard JSON communication pipes. Hook responses are returned as strict empty JSON payloads to `stdout`.
 
 ```text
 Antigravity Runtime
@@ -34,10 +34,9 @@ Antigravity Runtime
        ▼
 scripts/title_and_badge.sh
        │
-       ├─► /dev/tty: OSC 0 escape sequence + visible footer divider (PostInvocation)
+       ├─► /dev/tty: OSC 0 escape sequence only (\033]0;[folder:branch] topic\007)
        ▼
-   stdout: SessionStart/PreInvocation -> {"injectSteps": [], "terminationBehavior": ""}
-           PostInvocation             -> {"injectSteps": [{"systemMessage": {"systemMessage": "..."}}], "terminationBehavior": ""}
+   stdout: {"injectSteps": [], "terminationBehavior": ""} (zero trajectory pollution)
 ```
 
 ---
@@ -48,13 +47,11 @@ Custom settings can be defined in `~/.config/oh-my-agy/config.json`:
 
 ```json
 {
-  "show_footer": true,
   "show_title": true
 }
 ```
 
-- `show_footer`: Toggles the styled terminal footer divider printed to `/dev/tty` after each assistant response.
-- `show_title`: Toggles the OSC 0 escape sequence updating the window and tab title.
+- `show_title`: Toggles the OSC 0 escape sequence updating the window and tab title (default: `true`).
 
 ---
 

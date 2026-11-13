@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# oh-my-agy: dynamic terminal title and statusline badge for Google Antigravity
+# oh-my-agy: dynamic terminal tab and window title for Google Antigravity (Tab-Only Mode)
 # Engineered by Alex Seif and Sandcastle Holdings
 
 set -o pipefail
@@ -25,14 +25,9 @@ fi
 
 # Configuration options (from ~/.config/oh-my-agy/config.json)
 config_file="${OH_MY_AGY_CONFIG:-$HOME/.config/oh-my-agy/config.json}"
-show_footer="true"
 show_title="true"
 
 if [ -f "$config_file" ] && command -v jq >/dev/null 2>&1; then
-  cfg_footer=$(jq -r 'if .show_footer == false then "false" elif .show_footer == true then "true" else empty end' "$config_file" 2>/dev/null || true)
-  if [ "$cfg_footer" = "false" ]; then
-    show_footer="false"
-  fi
   cfg_title=$(jq -r 'if .show_title == false then "false" elif .show_title == true then "true" else empty end' "$config_file" 2>/dev/null || true)
   if [ "$cfg_title" = "false" ]; then
     show_title="false"
@@ -99,55 +94,14 @@ fi
 # Support OH_MY_AGY_TTY override for testing environments
 tty_device="${OH_MY_AGY_TTY:-/dev/tty}"
 
-# Emit OSC 0 escape sequence to tty if writable and enabled
+# Emit ONLY non-intrusive OSC 0 escape sequence to tty if writable and enabled
+# Never output printable text, newlines, or terminal control sequences that touch the viewport
 if [ "$show_title" = "true" ] && [ -w "$tty_device" ]; then
   printf '\033]0;%s\007' "$window_title" >> "$tty_device" 2>/dev/null || true
 fi
 
-# Build badge representations
-branch_badge_tty=""
-branch_badge_md=""
-if [ -n "$git_branch" ]; then
-  branch_badge_tty=" | 🌿 ${git_branch}"
-  branch_badge_md=" | 🌿 \`${git_branch}\`"
-fi
-
-topic_badge_tty=""
-topic_badge_md=""
-if [ -n "$topic" ]; then
-  topic_badge_tty=" | 💬 ${topic}"
-  topic_badge_md=" | 💬 *${topic}*"
-fi
-
-badge="📁 **${folder_name}**${branch_badge_md}${topic_badge_md} | ⏰ ${current_time}"
-
-# Output response based on event type
-if [ "$event_name" = "PostInvocation" ]; then
-  # Print visible footer directly to TTY if writable and enabled
-  if [ "$show_footer" = "true" ] && [ -w "$tty_device" ]; then
-    printf '\n\033[90m── 📁 %s%s%s | ⏰ %s ──\033[0m\n\n' "$folder_name" "$branch_badge_tty" "$topic_badge_tty" "$current_time" >> "$tty_device" 2>/dev/null || true
-  fi
-
-  if command -v jq >/dev/null 2>&1; then
-    jq -n --arg badge "$badge" '{
-      "injectSteps": [
-        {
-          "systemMessage": {
-            "systemMessage": $badge
-          }
-        }
-      ],
-      "terminationBehavior": ""
-    }'
-  else
-    cat <<EOF
-{"injectSteps":[{"systemMessage":{"systemMessage":"${badge}"}}],"terminationBehavior":""}
-EOF
-  fi
-  exit 0
-fi
-
-# For PreInvocation, SessionStart, or other events: return empty injectSteps
+# Tab-Only Mode: Return empty injectSteps across all events
+# Guaranteed zero viewport interference, zero cursor pollution, and zero LLM context impact
 if command -v jq >/dev/null 2>&1; then
   jq -n '{
     "injectSteps": [],
