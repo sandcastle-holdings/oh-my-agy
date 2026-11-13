@@ -36,17 +36,20 @@ The plugin decouples user interface feedback from model context:
 
 1. **`SessionStart`**:
    - Triggers once when a new conversation session initializes.
-   - Sets the initial window title and returns the introductory session badge.
+   - Sets the initial window title via `/dev/tty`.
+   - Returns empty injectSteps (`{"injectSteps": [], "terminationBehavior": ""}`).
 
 2. **`PreInvocation`**:
    - Triggers before each model invocation when the user submits a prompt.
    - Refreshes the terminal window title immediately so the title remains sticky across TUI redraws.
-   - Displays a status badge for the current invocation.
+   - Returns empty injectSteps (`{"injectSteps": [], "terminationBehavior": ""}`) to ensure no pre-turn prompt pollution occurs.
 
 3. **`PostInvocation`**:
-   - Triggers immediately after model and tool steps complete for a turn.
-   - Updates the terminal window title with any newly generated conversation title from the local SQLite summaries database.
-   - Returns an empty injectSteps array (`{"injectSteps": [], "terminationBehavior": ""}`) without adding extraneous conversation steps.
+   - Triggers immediately after assistant finishes responding.
+   - Updates the terminal window title with the resolved topic title from the local SQLite summaries database.
+   - Emits a styled visual footer divider directly to `/dev/tty`:
+     `\n\033[90m── 📁 <folder> | 🌿 <branch> | 💬 <topic> | ⏰ <time> ──\033[0m\n\n`
+   - Returns valid hook JSON with `injectSteps` containing the completion badge and `terminationBehavior: ""`.
 
 ### Hook Configuration (`hooks.json`)
 
@@ -91,7 +94,7 @@ The hook receives JSON on stdin containing standard Antigravity session metadata
   "conversationId": "52cac4e1-6883-41ac-95cc-aeb74b5621bf",
   "workspacePaths": ["/home/alexseif/dev/sandcastles-oh-my-agy"],
   "cwd": "/home/alexseif/dev/sandcastles-oh-my-agy",
-  "hookEventName": "PreInvocation",
+  "hookEventName": "PostInvocation",
   "modelName": "auto",
   "transcriptPath": "/path/to/transcript.jsonl",
   "artifactDirectoryPath": "/path/to/artifacts"
@@ -106,23 +109,24 @@ The script extracts:
 
 ### 3.2 Output Contract (stdout)
 
-#### For `SessionStart` and `PreInvocation`:
-The script outputs a valid systemMessage step:
+#### For `PostInvocation`:
+The script outputs the closing badge in `injectSteps`:
 
 ```json
 {
   "injectSteps": [
     {
       "systemMessage": {
-        "systemMessage": "📁 **sandcastles-oh-my-agy** | 🌿 `main` | ⏰ 18:15"
+        "systemMessage": "📁 **sandcastles-oh-my-agy** | 🌿 `main` | 💬 *Agy CLI Chat Management Initiative* | ⏰ 09:20"
       }
     }
-  ]
+  ],
+  "terminationBehavior": ""
 }
 ```
 
-#### For `PostInvocation`:
-The script updates the terminal window title via `/dev/tty` and returns:
+#### For `SessionStart` and `PreInvocation`:
+The script outputs empty injectSteps:
 
 ```json
 {
@@ -130,6 +134,22 @@ The script updates the terminal window title via `/dev/tty` and returns:
   "terminationBehavior": ""
 }
 ```
+
+---
+
+## 4. User Configuration
+
+Optional configuration can be placed in `~/.config/oh-my-agy/config.json`:
+
+```json
+{
+  "show_footer": true,
+  "show_title": true
+}
+```
+
+- **`show_footer`** (boolean, default: `true`): Toggles the styled terminal footer divider printed to `/dev/tty` after each assistant turn.
+- **`show_title`** (boolean, default: `true`): Toggles the OSC 0 escape sequence updating the window and tab title.
 
 Key requirements:
 - `systemMessage`: Must be an empty string (`""`) so the LLM receives no added tokens.

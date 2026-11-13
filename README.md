@@ -21,11 +21,11 @@ Engineered by Alex Seif and Sandcastle Holdings.
 
 The plugin hooks into Antigravity lifecycle events through `hooks.json`:
 
-- `SessionStart`: Runs when a conversation starts, establishing initial window title and badge.
-- `PreInvocation`: Runs before each model turn, ensuring the window title remains sticky across TUI redraws and showing an updated badge.
-- `PostInvocation`: Runs after each model turn finishes, updating the terminal title with the conversation title from the local SQLite database.
+- `SessionStart`: Sets the initial terminal window and tab title via `/dev/tty`.
+- `PreInvocation`: Refreshes the window title before prompt execution to ensure stickiness across TUI redraws, without injecting pre-response badges.
+- `PostInvocation`: Runs immediately after the assistant finishes responding. Emits a styled visual footer divider directly to `/dev/tty` (`── 📁 folder | 🌿 branch | ⏰ time ──`), updates the window title with the conversation topic, and returns the closing status badge.
 
-Escape sequences for window titles are directed straight to `/dev/tty` so they never corrupt Antigravity's standard JSON communication pipes. Hook results are returned as strict JSON payloads to `stdout`.
+Window title escape codes and visible footer dividers are directed straight to `/dev/tty` so they never corrupt Antigravity's standard JSON communication pipes. Hook responses are returned as strict JSON payloads to `stdout`.
 
 ```text
 Antigravity Runtime
@@ -34,11 +34,27 @@ Antigravity Runtime
        ▼
 scripts/title_and_badge.sh
        │
-       ├─► /dev/tty: OSC 0 escape sequence (\033]0;[folder:branch] topic\007)
+       ├─► /dev/tty: OSC 0 escape sequence + visible footer divider (PostInvocation)
        ▼
-   stdout: SessionStart/PreInvocation -> {"injectSteps": [{"systemMessage": {"systemMessage": "..."}}]}
-           PostInvocation             -> {"injectSteps": [], "terminationBehavior": ""}
+   stdout: SessionStart/PreInvocation -> {"injectSteps": [], "terminationBehavior": ""}
+           PostInvocation             -> {"injectSteps": [{"systemMessage": {"systemMessage": "..."}}], "terminationBehavior": ""}
 ```
+
+---
+
+## Configuration
+
+Custom settings can be defined in `~/.config/oh-my-agy/config.json`:
+
+```json
+{
+  "show_footer": true,
+  "show_title": true
+}
+```
+
+- `show_footer`: Toggles the styled terminal footer divider printed to `/dev/tty` after each assistant response.
+- `show_title`: Toggles the OSC 0 escape sequence updating the window and tab title.
 
 ---
 
