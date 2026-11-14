@@ -1,7 +1,9 @@
 {
   "name": "oh-my-agy",
   "version": "0.1.0",
-  "description": "Starship-style statuslines, dynamic terminal window titles, and ambient badges for Google Antigravity.",
+  "description": "Dynamic terminal tab and window naming for Google Antigravity with zero viewport interference.",
   "author": "Alex Seif",
-  "homepage": "https://alexseif.com"
+  "homepage": "https://github.com/sandcastle-holdings/oh-my-agy",
+  "repository": "https://github.com/sandcastle-holdings/oh-my-agy",
+  "logo": "assets/logo.svg"
 }

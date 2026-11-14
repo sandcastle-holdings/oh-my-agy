@@ -61,14 +61,17 @@ Custom settings can be defined in `~/.config/oh-my-agy/config.json`:
 sandcastles-oh-my-agy/
 ├── plugin.json               # Plugin manifest
 ├── hooks.json                # Lifecycle hook configuration
+├── assets/
+│   └── logo.svg              # Brand icon
+├── rules/
+│   ├── AGENTS.md             # Agent governance rules
+│   └── GEMINI.md -> AGENTS.md
 ├── scripts/
-│   └── title_and_badge.sh    # Main title and badge generator
+│   └── title_and_badge.sh    # Main title generator
 ├── tests/
 │   └── test_hook.sh          # Automated test suite
 ├── OBJECTIVE.md              # Project objective and roadmap
 ├── SPEC.md                   # Technical specification
-├── GEMINI.md                 # Agent rules and governance
-├── AGENTS.md -> GEMINI.md    # Standard symlink
 └── README.md                 # This file
 ```
 
@@ -84,6 +87,13 @@ All dependencies are standard utilities available on modern Unix-like systems.
 ---
 
 ## Installation & Enablement
+
+### Via agy plugin install
+```bash
+agy plugin install github:sandcastle-holdings/oh-my-agy
+# or locally:
+agy plugin install /home/alexseif/dev/sandcastles-oh-my-agy
+```
 
 ### Local Workspace Installation
 To load `oh-my-agy` into your project:
