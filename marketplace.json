@@ -1,0 +1,36 @@
+{
+  "name": "sandcastles-plugins",
+  "description": "Sandcastle Holdings plugin catalog for Google Antigravity.",
+  "plugins": [
+    {
+      "name": "oh-my-agy",
+      "displayName": "Oh My Agy",
+      "version": "0.1.0",
+      "description": "Dynamic terminal tab and window naming for Google Antigravity with zero viewport interference.",
+      "logo": "assets/logo.svg",
+      "author": {
+        "name": "Alex Seif",
+        "url": "https://alexseif.com"
+      },
+      "homepage": "https://github.com/sandcastle-holdings/oh-my-agy",
+      "repository": {
+        "type": "git",
+        "url": "https://github.com/sandcastle-holdings/oh-my-agy"
+      },
+      "license": "MIT",
+      "keywords": [
+        "terminal",
+        "tab-title",
+        "window-title",
+        "productivity",
+        "hooks",
+        "antigravity"
+      ],
+      "source": {
+        "type": "archive",
+        "url": "https://github.com/sandcastle-holdings/oh-my-agy/archive/refs/tags/v0.1.0.zip",
+        "sha256": "f8a7c6a5df9e7f2f78f1da71c6021fae8c4ecf662b266c01e25dd51bd71f428d"
+      }
+    }
+  ]
+}

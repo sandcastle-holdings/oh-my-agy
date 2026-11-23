@@ -88,29 +88,34 @@ All dependencies are standard utilities available on modern Unix-like systems.
 
 ## Installation & Enablement
 
-### Via agy plugin install
-```bash
-agy plugin install github:sandcastle-holdings/oh-my-agy
-# or locally:
-agy plugin install /home/alexseif/dev/sandcastles-oh-my-agy
-```
-
-### Local Workspace Installation
-To load `oh-my-agy` into your project:
-
-```bash
-# In your project root
-mkdir -p .agents/plugins
-ln -s /home/alexseif/dev/sandcastles-oh-my-agy .agents/plugins/oh-my-agy
-```
-
-### Global Installation
-To enable `oh-my-agy` globally across all Antigravity CLI sessions:
+### 1. Global Installation (Recommended)
+Clone directly into your global Antigravity plugins directory:
 
 ```bash
 mkdir -p ~/.gemini/config/plugins
-ln -s /home/alexseif/dev/sandcastles-oh-my-agy ~/.gemini/config/plugins/oh-my-agy
+git clone https://github.com/sandcastle-holdings/oh-my-agy.git ~/.gemini/config/plugins/oh-my-agy
 ```
+
+Antigravity automatically discovers and activates the plugin upon session launch.
+
+### 2. Local Directory Install via agy CLI
+Alternatively, clone the repository locally and install via the CLI:
+
+```bash
+git clone https://github.com/sandcastle-holdings/oh-my-agy.git
+agy plugin install ./oh-my-agy
+```
+
+### 3. Local Workspace Installation
+To load `oh-my-agy` for a single project workspace:
+
+```bash
+mkdir -p .agents/plugins
+ln -s /path/to/oh-my-agy .agents/plugins/oh-my-agy
+```
+
+### 4. Custom Marketplace Catalog
+This repository maintains a self-contained `marketplace.json` catalog entry, allowing organizations and teams to reference or mirror it in custom marketplace configurations.
 
 ---
 
@@ -130,25 +135,15 @@ echo '{
 
 Expected output (stdout):
 ```json
-{
-  "injectSteps": [
-    {
-      "systemMessage": {
-        "systemMessage": "",
-        "metadata": {
-          "user_markdown": "📁 **sandcastles-oh-my-agy** | 🌿 `main` | ⏰ 18:20"
-        }
-      }
-    }
-  ]
-}
+{"injectSteps":[],"terminationBehavior":""}
 ```
+*Note*: The OSC 0 window title sequence is written directly to `/dev/tty`.
 
 ### 2. Test PostInvocation with Database Topic
 
 ```bash
 echo '{
-  "conversationId": "ecb50299-ff21-43f1-9353-e09135ffb8be",
+  "conversationId": "test-uuid-001",
   "cwd": "/home/alexseif/dev/sandcastles-oh-my-agy",
   "hookEventName": "PostInvocation"
 }' | ./scripts/title_and_badge.sh
@@ -156,18 +151,7 @@ echo '{
 
 Expected output (stdout):
 ```json
-{
-  "injectSteps": [
-    {
-      "systemMessage": {
-        "systemMessage": "",
-        "metadata": {
-          "user_markdown": "📁 **sandcastles-oh-my-agy** | 🌿 `main` | 💬 *Agy CLI Chat Management Initiative* | ⏰ 18:20"
-        }
-      }
-    }
-  ]
-}
+{"injectSteps":[],"terminationBehavior":""}
 ```
 
 ### 3. Automated Test Suite
